@@ -1,12 +1,20 @@
 pipeline {
-  agent {
-    docker { image 'oraclelinux:9-slim' } 
-  }
-  stages {
-    stage('Test') {
-      steps {
-        sh 'uname -r' 
-      }
+    agent {
+        docker {
+            image 'container-registry.oracle.com/os/oraclelinux:9-slim'
+            args '--userns=keep-id'
+        }
     }
-  }
+
+    stages {
+        stage('Test') {
+            steps {
+                sh '''
+                    id
+                    uname -r
+                    cat /etc/os-release
+                '''
+            }
+        }
+    }
 }
