@@ -17,7 +17,7 @@ The flow is: source commit → Jenkins build and test → SonarQube scan → ima
 
 ## Jenkins prerequisites
 
-Configure a **Pipeline script from SCM** job using Git with Repository URL `https://github.com/shravankumarinchur/Jenkins.git`, Branch Specifier `*/main`, and Script Path `spring-boot-app/JenkinsFile` (capital `F`). Jenkins normally looks for a root-level `Jenkinsfile`, so the Script Path matters. The job needs the Git, GitHub, Docker Pipeline, and Credentials Binding plugins and a worker with access to a Docker daemon. If the repository is private, select a credential that the Jenkins Git SCM configuration can use for checkout; the `github` Secret text credential below is used inside the pipeline for pushing, not automatically for SCM checkout.
+Configure a **Pipeline script from SCM** job using Git with Repository URL `https://github.com/shravankumarinchur/Jenkins.git`, Branch Specifier `*/main`, and Script Path `spring-boot-app/JenkinsFile` (capital `F`). Jenkins normally looks for a root-level `Jenkinsfile`, so the Script Path matters. The job needs the Git, Docker Pipeline, and Credentials Binding plugins and a worker with access to a Docker daemon. The GitHub plugin is optional and only needed for the webhook setup described below. If the repository is private, select a credential that the Jenkins Git SCM configuration can use for checkout; the `github` Secret text credential below is used inside the pipeline for pushing, not automatically for SCM checkout.
 
 The private OCIR image `ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent` must contain JDK 21, Maven 3.6.3 or newer, Git, and the Docker CLI. Jenkins prints their versions and checks Docker daemon access at the start of the build. That image's recipe is not in this repository, so verify its contents before the first run. Maven also needs access to Maven Central or your configured artifact mirror.
 
@@ -31,17 +31,9 @@ Create these Jenkins credentials with the exact IDs below:
 
 ## Triggering builds
 
-The Jenkinsfile declares `githubPush()` so that a push to the configured GitHub repository can trigger the job. Commit and push this Jenkinsfile, then click **Build Now** once in the Jenkins job so Jenkins loads the trigger. **Build Now** also works any time afterward, including immediately after a manifest-only commit made by the pipeline; a manual build runs all stages. The pipeline skips an automatic build when the latest commit is its own `ci: update deployment image to ...` commit, preventing a build loop.
+The Jenkinsfile declares `pollSCM('H/5 * * * *')`, a trigger supported by this Jenkins installation. Commit and push this Jenkinsfile, then click **Build Now** once in the Jenkins job so Jenkins loads the trigger. Jenkins will check the configured Git repository for changes approximately every five minutes and run the job when it sees a new commit on `main`; no GitHub webhook or GitHub plugin is needed for this mode. **Build Now** works any time, including immediately after a manifest-only commit made by the pipeline; a manual build runs all stages. The pipeline skips an automatic build when the latest commit is its own `ci: update deployment image to ...` commit, preventing a build loop.
 
-For push-triggered builds, create a webhook in the GitHub repository under **Settings → Webhooks → Add webhook**:
-
-- **Payload URL:** `https://YOUR-REACHABLE-JENKINS-URL/github-webhook/` (keep the trailing slash; include any Jenkins context path).
-- **Content type:** `application/json`.
-- **Events:** **Just the push event**; leave the webhook active.
-
-GitHub must be able to reach this URL from the internet. The existing Jenkins `github` credential is **not** the webhook URL or a substitute for the webhook. After saving it, check **Recent Deliveries** in GitHub for a successful delivery, then push a small change to `main` and check the Jenkins job's build history. The job is configured for `main`, so pushes to other branches do not build this job. GitHub's initial webhook ping checks delivery but does not build the job.
-
-If Jenkins is only reachable on a private network, use SCM polling instead: replace the Jenkinsfile's `githubPush()` trigger with `pollSCM('H/5 * * * *')`, commit the change, and click **Build Now** once to load it. This checks for Git changes approximately every five minutes; it is not instant. Do not enable both trigger methods for the same job.
+For **immediate** push-triggered builds instead of polling, install the Jenkins GitHub plugin and configure this job's **Build Triggers → GitHub hook trigger for GITScm polling**. Remove the `pollSCM` block from the Jenkinsfile when switching to this mode. Create a webhook in the GitHub repository under **Settings → Webhooks → Add webhook** with payload URL `https://YOUR-REACHABLE-JENKINS-URL/github-webhook/` (include the trailing slash and any Jenkins context path), content type `application/json`, and **Just the push event**. GitHub must be able to reach Jenkins from the internet. Check GitHub's **Recent Deliveries** for a successful delivery, then push a small change to `main` and check the Jenkins job's build history. The `github` Jenkins credential is not a substitute for a webhook. Do not enable both trigger methods for this job.
 
 The SonarQube URL in `spring-boot-app/JenkinsFile` is `http://100.92.54.104:9000/`. Jenkins must be able to reach it. The scan uploads results; this pipeline does not yet enforce a SonarQube quality gate.
 
