@@ -1,12 +1,5 @@
 pipeline {
-  agent {
-    docker {
-      image 'ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent:v1'
-      registryUrl 'https://ocir.us-ashburn-1.oci.oraclecloud.com/'
-      registryCredentialsId 'OCIR'
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-    }
-  }
+  agent any
 
   options {
     disableConcurrentBuilds()
@@ -33,15 +26,39 @@ pipeline {
     }
 
     stage('Build and Test') {
-      when { expression { env.SKIP_PIPELINE != 'true' } }
+      when {
+        beforeAgent true
+        expression { env.SKIP_PIPELINE != 'true' }
+      }
+      agent {
+        docker {
+          image 'ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent:v1'
+          registryUrl 'https://ocir.us-ashburn-1.oci.oraclecloud.com/'
+          registryCredentialsId 'OCIR'
+          reuseNode true
+          args '--user root'
+        }
+      }
       steps {
-        sh 'java -version && javac -version && mvn -version && git --version && docker version'
+        sh 'java -version && javac -version && mvn -version && git --version'
         sh 'cd spring-boot-app && mvn -B -ntp clean verify'
       }
     }
 
     stage('Static Code Analysis') {
-      when { expression { env.SKIP_PIPELINE != 'true' } }
+      when {
+        beforeAgent true
+        expression { env.SKIP_PIPELINE != 'true' }
+      }
+      agent {
+        docker {
+          image 'ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent:v1'
+          registryUrl 'https://ocir.us-ashburn-1.oci.oraclecloud.com/'
+          registryCredentialsId 'OCIR'
+          reuseNode true
+          args '--user root'
+        }
+      }
       environment {
         SONAR_URL = 'http://100.92.54.104:9000/'
       }
@@ -58,6 +75,7 @@ pipeline {
         withCredentials([usernamePassword(credentialsId: 'OCIR', usernameVariable: 'OCI_USER', passwordVariable: 'OCI_TOKEN')]) {
           sh '''
             set -eu
+            docker version
             REGISTRY='ocir.us-ashburn-1.oci.oraclecloud.com'
             IMAGE_TAG="${REGISTRY}/idsccoayafgg/my-project/ultimate-cicd:${BUILD_NUMBER}"
 
