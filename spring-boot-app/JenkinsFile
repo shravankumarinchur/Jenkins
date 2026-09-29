@@ -92,10 +92,10 @@ pipeline {
       when { expression { env.SKIP_PIPELINE != 'true' } }
       environment {
         GIT_REPO_NAME = 'Jenkins'
-        GIT_USER_NAME = 'shravankumarinchur'
+        GIT_REPO_OWNER = 'shravankumarinchur'
       }
       steps {
-        withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
+        withCredentials([usernamePassword(credentialsId: 'github', usernameVariable: 'GITHUB_AUTH_USER', passwordVariable: 'GITHUB_TOKEN')]) {
           sh '''
             set -eu
             IMAGE_TAG="ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/ultimate-cicd:${BUILD_NUMBER}"
@@ -114,7 +114,7 @@ pipeline {
             fi
 
             git -c user.email='shravankumarinchur868@gmail.com' -c user.name='Shravan Inchur' commit -m "ci: update deployment image to ${BUILD_NUMBER}"
-            GIT_ASKPASS="$PWD/ci/git-askpass.sh" GIT_TERMINAL_PROMPT=0 git -c credential.helper= push "https://${GIT_USER_NAME}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git" HEAD:main
+            GIT_ASKPASS="$PWD/ci/git-askpass.sh" GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c http.proxy=http://www-proxy-wdc.oraclecorp.com:80 push "https://github.com/${GIT_REPO_OWNER}/${GIT_REPO_NAME}.git" HEAD:main
           '''
         }
       }

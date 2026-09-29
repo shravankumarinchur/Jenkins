@@ -17,7 +17,7 @@ The flow is: source commit → Jenkins build and test → SonarQube scan → ima
 
 ## Jenkins prerequisites
 
-Configure a **Pipeline script from SCM** job using Git with Repository URL `https://github.com/shravankumarinchur/Jenkins.git`, Branch Specifier `*/main`, and Script Path `spring-boot-app/JenkinsFile` (capital `F`). Jenkins normally looks for a root-level `Jenkinsfile`, so the Script Path matters. The job needs the Git, Docker Pipeline, and Credentials Binding plugins and a worker with a working `docker`-compatible CLI (Docker or Podman) that can run, build, and push images. The GitHub plugin is optional and only needed for the webhook setup described below. If the repository is private, select a credential that the Jenkins Git SCM configuration can use for checkout; the `github` Secret text credential below is used inside the pipeline for pushing, not automatically for SCM checkout.
+Configure a **Pipeline script from SCM** job using Git with Repository URL `https://github.com/shravankumarinchur/Jenkins.git`, Branch Specifier `*/main`, and Script Path `spring-boot-app/JenkinsFile` (capital `F`). Jenkins normally looks for a root-level `Jenkinsfile`, so the Script Path matters. The job needs the Git, Docker Pipeline, and Credentials Binding plugins and a worker with a working `docker`-compatible CLI (Docker or Podman) that can run, build, and push images. The GitHub plugin is optional and only needed for the webhook setup described below. If the repository is private, select a credential that the Jenkins Git SCM configuration can use for checkout; the `github` credential below is used inside the pipeline for pushing, not automatically for SCM checkout.
 
 The private OCIR image `ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent:v1` contains JDK 17, Maven 3.6.3, and Git, as shown by the Jenkins build log. Jenkins prints their versions in the Maven container and checks the container CLI on the host before building the application image. The Maven container does not need access to `/var/run/docker.sock`; the host builds and pushes the application image using the JAR in the shared workspace. Maven also needs access to Maven Central through an approved proxy or to your configured artifact mirror. A direct connection to Maven Central was refused in the initial Jenkins run.
 
@@ -29,7 +29,7 @@ Create these Jenkins credentials with the exact IDs below:
 | --- | --- | --- |
 | `OCIR` | Username with password | Pulling the private Maven agent and pushing the finished app image. Use your OCIR username and auth token. |
 | `sonarqube` | Secret text | SonarQube analysis token. |
-| `github` | Secret text | GitHub personal access token with permission to write repository contents on `main`. |
+| `github` | Username with password | GitHub username and a personal access token **as the password**, with permission to write repository contents on `main`. A normal GitHub account password will not work for Git over HTTPS. |
 
 ## Triggering builds
 
