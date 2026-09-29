@@ -36,7 +36,7 @@ pipeline {
 	    cd spring-boot-app
             # 1. Define variables to avoid typing mistakes
             REGISTRY="ocir.us-ashburn-1.oci.oraclecloud.com"
-            IMAGE_TAG="${REGISTRY}/idsccoayafgg/my-project/maven-agent:${BUILD_NUMBER}"
+            IMAGE_TAG="${REGISTRY}/idsccoayafgg/my-project/ultimate-cicd:${BUILD_NUMBER}"
             
             # 2. Build the image with the correct tag
             docker build -t ${IMAGE_TAG} .
