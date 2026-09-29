@@ -33,81 +33,7 @@ pipeline {
     steps {
         withCredentials([usernamePassword(credentialsId: 'OCIR', usernameVariable: 'OCI_USER', passwordVariable: 'OCI_TOKEN')]) {
             sh '''
-            cd spring-boot-app
-            # 1. Define variables to avoid typing mistakes
-            REGISTRY="ocir.us-ashburn-1.oci.oraclecloud.com"
-            IMAGE_TAG="${REGISTRY}/idsccoayafgg/my-project/maven-agent:${BUILD_NUMBER}"
-            
-            # 2. Build the image with the correct tag
-            docker build -t ${IMAGE_TAG} .
-            
-            # 3. Log in using the exact same registry endpoint
-            echo "${OCI_TOKEN}" | docker login -u "${OCI_USER}" --password-stdin ${REGISTRY}
-            
-            # 4. Push the tagged image
-            docker push ${IMAGE_TAG}
-            '''
-        }
-     }
-    }
-    stage('Update Deployment File') {
-        environment {
-            GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
-            GIT_USER_NAME = "iam-veeramalla"
-        }
-        steps {
-            withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-                sh '''
-                    git config user.email "abhishek.xyz@gmail.com"
-                    git config user.name "Abhishek Veeramalla"
-                    BUILD_NUMBER=${BUILD_NUMBER}
-                    sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                    git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                    git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                    git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-                '''
-            }
-        }
-    }
-  }
-}
-[root@jenkins spring-boot-app]# vi JenkinsFile 
-[root@jenkins spring-boot-app]# cat JenkinsFile 
-pipeline {
-  agent {
-    docker {
-      image 'ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent'
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock' // mount Docker socket to access the host's Docker daemon
-    }
-  }
-  stages {
-    stage('Checkout') {
-      steps {
-        sh 'echo passed'
-        //git branch: 'main', url: 'https://github.com/iam-veeramalla/Jenkins-Zero-To-Hero.git'
-      }
-    }
-    stage('Build and Test') {
-      steps {
-        sh 'ls -ltr'
-        // build the project and create a JAR file
-        sh 'cd spring-boot-app && mvn clean package'
-      }
-    }
-    stage('Static Code Analysis') {
-      environment {
-        SONAR_URL = "http://100.92.54.104:9000/"
-      }
-      steps {
-        withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-          sh 'cd spring-boot-app && mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}'
-        }
-      }
-    }
-    stage('Build & Push via CLI') {
-    steps {
-        withCredentials([usernamePassword(credentialsId: 'OCIR', usernameVariable: 'OCI_USER', passwordVariable: 'OCI_TOKEN')]) {
-            sh '''
+	    cd spring-boot-app
             # 1. Define variables to avoid typing mistakes
             REGISTRY="ocir.us-ashburn-1.oci.oraclecloud.com"
             IMAGE_TAG="${REGISTRY}/idsccoayafgg/my-project/maven-agent:${BUILD_NUMBER}"
@@ -127,17 +53,17 @@ pipeline {
 
     stage('Update Deployment File') {
         environment {
-            GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
-            GIT_USER_NAME = "iam-veeramalla"
+            GIT_REPO_NAME = "Jenkins"
+            GIT_USER_NAME = "shravankumarinchur"
         }
         steps {
             withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
                 sh '''
-                    git config user.email "abhishek.xyz@gmail.com"
-                    git config user.name "Abhishek Veeramalla"
+                    git config user.email "shravankumarinchur868@gmail.com"
+                    git config user.name "Shravan Inchur"
                     BUILD_NUMBER=${BUILD_NUMBER}
-                    sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                    git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+                    sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" spring-boot-app-manifests/deployment.yml
+                    git add spring-boot-app-manifests/deployment.yml
                     git commit -m "Update deployment image to version ${BUILD_NUMBER}"
                     git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
                 '''
