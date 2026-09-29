@@ -33,7 +33,7 @@ pipeline {
     steps {
         withCredentials([usernamePassword(credentialsId: 'OCIR', usernameVariable: 'OCI_USER', passwordVariable: 'OCI_TOKEN')]) {
             sh '''
-            
+            cd spring-boot-app
             # 1. Define variables to avoid typing mistakes
             REGISTRY="ocir.us-ashburn-1.oci.oraclecloud.com"
             IMAGE_TAG="${REGISTRY}/idsccoayafgg/my-project/maven-agent:${BUILD_NUMBER}"
