@@ -14,8 +14,16 @@ spec:
       labels:
         app: spring-boot-app
     spec:
+      imagePullSecrets:
+      - name: ocir-pull-secret
       containers:
       - name: spring-boot-app
         image: ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/ultimate-cicd:replaceImageTag
         ports:
         - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5

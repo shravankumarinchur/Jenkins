@@ -35,7 +35,7 @@ java -jar target/spring-boot-web.jar
 
 The Dockerfile uses `container-registry.oracle.com/graalvm/jdk:21` as its runtime base image. This is Oracle Container Registry, which is separate from the private OCIR registry used by Jenkins to push the finished application image. If your environment requires authentication for the base image, log in to `container-registry.oracle.com` before building.
 
-The Jenkins `maven-agent` image must contain JDK 21 and Maven 3.6.3 or newer. This is a separate image from the application runtime image in the Dockerfile.
+The Jenkins `maven-agent` image must contain JDK 21, Maven 3.6.3 or newer, Git, and the Docker CLI. This is a separate image from the application runtime image in the Dockerfile. See the repository root README for Jenkins and Argo CD setup.
 
 Build the Docker Image
 
@@ -71,4 +71,3 @@ cd /opt/sonarqube/bin/linux-x86-64
 ```
 
 Hurray !! Now you can access the `SonarQube Server` on `http://<ip-address>:9000` 
-

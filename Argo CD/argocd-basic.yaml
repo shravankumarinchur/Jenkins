@@ -1,10 +1,13 @@
+# Creates an Argo CD instance through the Argo CD Operator.
+# Apply once for a new cluster; this does not deploy the Spring Boot app.
 apiVersion: argoproj.io/v1alpha1
 kind: ArgoCD
 metadata:
   name: example-argocd
+  namespace: argocd
   labels:
     example: basic
 spec:
   server:
     service:
-      type: NodePort
+      type: ClusterIP

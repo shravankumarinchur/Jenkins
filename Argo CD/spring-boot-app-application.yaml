@@ -1,0 +1,18 @@
+# Apply after Jenkins has published the first image and replaced replaceImageTag.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: spring-boot-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shravankumarinchur/Jenkins.git
+    targetRevision: main
+    path: spring-boot-app-manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      selfHeal: true

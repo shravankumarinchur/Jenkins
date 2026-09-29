@@ -2,73 +2,104 @@ pipeline {
   agent {
     docker {
       image 'ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent'
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock' // mount Docker socket to access the host's Docker daemon
+      registryUrl 'https://ocir.us-ashburn-1.oci.oraclecloud.com/'
+      registryCredentialsId 'OCIR'
+      args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
     }
   }
+
+  options {
+    disableConcurrentBuilds()
+  }
+
+  triggers {
+    githubPush()
+  }
+
   stages {
-    stage('Checkout') {
+    stage('Check trigger') {
       steps {
-        sh 'echo passed'
-        //git branch: 'main', url: 'https://github.com/iam-veeramalla/Jenkins-Zero-To-Hero.git'
+        script {
+          def subject = sh(script: 'git log -1 --pretty=%s', returnStdout: true).trim()
+          def manualBuild = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
+          env.SKIP_PIPELINE = (!manualBuild && subject.startsWith('ci: update deployment image to ')) ? 'true' : 'false'
+          if (env.SKIP_PIPELINE == 'true') {
+            echo 'Skipping the manifest-only commit made by this pipeline.'
+          } else if (manualBuild) {
+            echo 'Manual build requested; running all pipeline stages.'
+          }
+        }
       }
     }
+
     stage('Build and Test') {
+      when { expression { env.SKIP_PIPELINE != 'true' } }
       steps {
-        sh 'java -version && javac -version && mvn -version'
-        // build the project and create a JAR file
-        sh 'cd spring-boot-app && mvn clean package'
+        sh 'java -version && javac -version && mvn -version && git --version && docker version'
+        sh 'cd spring-boot-app && mvn -B -ntp clean verify'
       }
     }
+
     stage('Static Code Analysis') {
+      when { expression { env.SKIP_PIPELINE != 'true' } }
       environment {
-        SONAR_URL = "http://100.92.54.104:9000/"
+        SONAR_URL = 'http://100.92.54.104:9000/'
       }
       steps {
-        withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-          sh 'cd spring-boot-app && mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}'
+        withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_TOKEN')]) {
+          sh 'cd spring-boot-app && mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.0.0.4389:sonar -Dsonar.host.url="$SONAR_URL"'
         }
       }
     }
-    stage('Build & Push via CLI') {
-    steps {
+
+    stage('Build and Push Image') {
+      when { expression { env.SKIP_PIPELINE != 'true' } }
+      steps {
         withCredentials([usernamePassword(credentialsId: 'OCIR', usernameVariable: 'OCI_USER', passwordVariable: 'OCI_TOKEN')]) {
-            sh '''
-	    cd spring-boot-app
-            # 1. Define variables to avoid typing mistakes
-            REGISTRY="ocir.us-ashburn-1.oci.oraclecloud.com"
+          sh '''
+            set -eu
+            REGISTRY='ocir.us-ashburn-1.oci.oraclecloud.com'
             IMAGE_TAG="${REGISTRY}/idsccoayafgg/my-project/ultimate-cicd:${BUILD_NUMBER}"
-            
-            # 2. Build the image with the correct tag
-            docker build -t ${IMAGE_TAG} .
-            
-            # 3. Log in using the exact same registry endpoint
-            echo "${OCI_TOKEN}" | docker login -u "${OCI_USER}" --password-stdin ${REGISTRY}
-            
-            # 4. Push the tagged image
-            docker push ${IMAGE_TAG}
-            '''
+
+            printf '%s' "$OCI_TOKEN" | docker login -u "$OCI_USER" --password-stdin "$REGISTRY"
+            cd spring-boot-app
+            docker build -t "$IMAGE_TAG" .
+            docker push "$IMAGE_TAG"
+          '''
         }
-     }
+      }
     }
 
     stage('Update Deployment File') {
-        environment {
-            GIT_REPO_NAME = "Jenkins"
-            GIT_USER_NAME = "shravankumarinchur"
+      when { expression { env.SKIP_PIPELINE != 'true' } }
+      environment {
+        GIT_REPO_NAME = 'Jenkins'
+        GIT_USER_NAME = 'shravankumarinchur'
+      }
+      steps {
+        withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
+          sh '''
+            set -eu
+            IMAGE_TAG="ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/ultimate-cicd:${BUILD_NUMBER}"
+            MANIFEST='spring-boot-app-manifests/deployment.yml'
+
+            if ! grep -Eq '^[[:space:]]*image:[[:space:]]*[^[:space:]]*/ultimate-cicd:[^[:space:]]+' "$MANIFEST"; then
+              echo 'Expected ultimate-cicd image reference was not found in the Deployment.' >&2
+              exit 1
+            fi
+            sed -i -E "s|^[[:space:]]*image:[[:space:]]*[^[:space:]]*/ultimate-cicd:[^[:space:]]+|        image: ${IMAGE_TAG}|" "$MANIFEST"
+
+            git add "$MANIFEST"
+            if git diff --cached --quiet; then
+              echo "Deployment already uses ${IMAGE_TAG}; nothing to commit."
+              exit 0
+            fi
+
+            git -c user.email='shravankumarinchur868@gmail.com' -c user.name='Shravan Inchur' commit -m "ci: update deployment image to ${BUILD_NUMBER}"
+            GIT_ASKPASS="$PWD/ci/git-askpass.sh" GIT_TERMINAL_PROMPT=0 git -c credential.helper= push "https://${GIT_USER_NAME}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git" HEAD:main
+          '''
         }
-        steps {
-            withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-                sh '''
-                    git config user.email "shravankumarinchur868@gmail.com"
-                    git config user.name "Shravan Inchur"
-                    BUILD_NUMBER=${BUILD_NUMBER}
-                    sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" spring-boot-app-manifests/deployment.yml
-                    git add spring-boot-app-manifests/deployment.yml
-                    git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                    git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-                '''
-            }
-        }
+      }
     }
   }
 }
