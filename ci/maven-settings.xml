@@ -1,0 +1,12 @@
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+  <proxies>
+    <proxy>
+      <id>oracle-network-proxy</id>
+      <active>true</active>
+      <protocol>http</protocol>
+      <host>www-proxy-wdc.oraclecorp.com</host>
+      <port>80</port>
+      <nonProxyHosts>localhost|127.0.0.1|100.92.54.104</nonProxyHosts>
+    </proxy>
+  </proxies>
+</settings>

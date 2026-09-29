@@ -41,7 +41,7 @@ pipeline {
       }
       steps {
         sh 'java -version && javac -version && mvn -version && git --version'
-        sh 'cd spring-boot-app && mvn -B -ntp clean verify'
+        sh 'cd spring-boot-app && mvn -s ../ci/maven-settings.xml -B -ntp clean verify'
       }
     }
 
@@ -64,7 +64,7 @@ pipeline {
       }
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_TOKEN')]) {
-          sh 'cd spring-boot-app && mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.0.0.4389:sonar -Dsonar.host.url="$SONAR_URL"'
+          sh 'cd spring-boot-app && mvn -s ../ci/maven-settings.xml -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.0.0.4389:sonar -Dsonar.host.url="$SONAR_URL"'
         }
       }
     }

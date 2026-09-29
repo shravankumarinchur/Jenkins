@@ -1,6 +1,6 @@
 # Jenkins to Argo CD: Spring Boot on Kubernetes
 
-This repository builds a Java 21 Spring Boot app, publishes it to Oracle Cloud Infrastructure Registry (OCIR), and deploys it through Argo CD. The manifests are plain Kubernetes YAML; this project does not use Helm.
+This repository builds a Java 17 Spring Boot app, publishes it to Oracle Cloud Infrastructure Registry (OCIR), and deploys it through Argo CD. The manifests are plain Kubernetes YAML; this project does not use Helm.
 
 ## What each file does
 
@@ -19,7 +19,9 @@ The flow is: source commit → Jenkins build and test → SonarQube scan → ima
 
 Configure a **Pipeline script from SCM** job using Git with Repository URL `https://github.com/shravankumarinchur/Jenkins.git`, Branch Specifier `*/main`, and Script Path `spring-boot-app/JenkinsFile` (capital `F`). Jenkins normally looks for a root-level `Jenkinsfile`, so the Script Path matters. The job needs the Git, Docker Pipeline, and Credentials Binding plugins and a worker with a working `docker`-compatible CLI (Docker or Podman) that can run, build, and push images. The GitHub plugin is optional and only needed for the webhook setup described below. If the repository is private, select a credential that the Jenkins Git SCM configuration can use for checkout; the `github` Secret text credential below is used inside the pipeline for pushing, not automatically for SCM checkout.
 
-The private OCIR image `ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent:v1` must contain JDK 21, Maven 3.6.3 or newer, and Git. Jenkins prints their versions in the Maven container and checks the container CLI on the host before building the application image. The Maven container does not need access to `/var/run/docker.sock`; the host builds and pushes the application image using the JAR in the shared workspace. That image's recipe is not in this repository, so verify its contents before the first run. Maven also needs access to Maven Central or your configured artifact mirror.
+The private OCIR image `ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent:v1` contains JDK 17, Maven 3.6.3, and Git, as shown by the Jenkins build log. Jenkins prints their versions in the Maven container and checks the container CLI on the host before building the application image. The Maven container does not need access to `/var/run/docker.sock`; the host builds and pushes the application image using the JAR in the shared workspace. Maven also needs access to Maven Central through an approved proxy or to your configured artifact mirror. A direct connection to Maven Central was refused in the initial Jenkins run.
+
+The pipeline passes `ci/maven-settings.xml` to Maven in both the build and Sonar stages. It uses the same `www-proxy-wdc.oraclecorp.com:80` proxy shown in the successful Git checkout and bypasses that proxy for the private SonarQube address. Jenkins Git checkout's proxy setting does not configure Maven. This file contains no credentials; if the proxy requires authentication, use Jenkins credentials rather than adding a password to the repository.
 
 Create these Jenkins credentials with the exact IDs below:
 

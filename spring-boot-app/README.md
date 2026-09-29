@@ -1,6 +1,6 @@
 # Spring Boot based Java web application
  
-This is a Spring Boot web application built with Java 21 and Maven 3.6.3 or newer. The build dependencies are defined in `pom.xml` in this directory.
+This is a Spring Boot web application built with Java 17 and Maven 3.6.3 or newer. The build dependencies are defined in `pom.xml` in this directory.
 
 This is a MVC architecture based application where controller returns a page with title and message attributes to the view.
 
@@ -25,7 +25,7 @@ The above maven target stroes the artifacts to the `target` directory. You can e
 ** Note: To avoid issues with local setup, Java versions and other dependencies, I would recommend the docker way. **
 
 
-### Execute locally (Java 21 needed) and access the application on http://localhost:8080
+### Execute locally (Java 17 or newer needed) and access the application on http://localhost:8080
 
 ```
 java -jar target/spring-boot-web.jar
@@ -35,7 +35,7 @@ java -jar target/spring-boot-web.jar
 
 The Dockerfile uses `container-registry.oracle.com/graalvm/jdk:21` as its runtime base image. This is Oracle Container Registry, which is separate from the private OCIR registry used by Jenkins to push the finished application image. If your environment requires authentication for the base image, log in to `container-registry.oracle.com` before building.
 
-The Jenkins `maven-agent` image must contain JDK 21, Maven 3.6.3 or newer, and Git. Jenkins runs the container CLI on its host, so the Maven image does not need a Docker CLI or socket. This is a separate image from the application runtime image in the Dockerfile. See the repository root README for Jenkins and Argo CD setup.
+The Jenkins `maven-agent:v1` image contains JDK 17, Maven 3.6.3, and Git. Jenkins runs the container CLI on its host, so the Maven image does not need a Docker CLI or socket. The Java 17 build runs on the Java 21 runtime image in the Dockerfile. See the repository root README for Jenkins and Argo CD setup.
 
 Build the Docker Image
 
