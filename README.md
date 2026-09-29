@@ -19,7 +19,7 @@ The flow is: source commit → Jenkins build and test → SonarQube scan → ima
 
 Configure a **Pipeline script from SCM** job using Git with Repository URL `https://github.com/shravankumarinchur/Jenkins.git`, Branch Specifier `*/main`, and Script Path `spring-boot-app/JenkinsFile` (capital `F`). Jenkins normally looks for a root-level `Jenkinsfile`, so the Script Path matters. The job needs the Git, Docker Pipeline, and Credentials Binding plugins and a worker with access to a Docker daemon. The GitHub plugin is optional and only needed for the webhook setup described below. If the repository is private, select a credential that the Jenkins Git SCM configuration can use for checkout; the `github` Secret text credential below is used inside the pipeline for pushing, not automatically for SCM checkout.
 
-The private OCIR image `ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent` must contain JDK 21, Maven 3.6.3 or newer, Git, and the Docker CLI. Jenkins prints their versions and checks Docker daemon access at the start of the build. That image's recipe is not in this repository, so verify its contents before the first run. Maven also needs access to Maven Central or your configured artifact mirror.
+The private OCIR image `ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent:v1` must contain JDK 21, Maven 3.6.3 or newer, Git, and the Docker CLI. Jenkins prints their versions and checks Docker daemon access at the start of the build. That image's recipe is not in this repository, so verify its contents before the first run. Maven also needs access to Maven Central or your configured artifact mirror.
 
 Create these Jenkins credentials with the exact IDs below:
 
