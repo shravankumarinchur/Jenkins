@@ -1,78 +1,58 @@
-# Jenkins to Argo CD: Spring Boot on Kubernetes
+# Spring Boot CI/CD with Jenkins and Argo CD
 
-This repository builds a Java 17 Spring Boot app, publishes it to Oracle Cloud Infrastructure Registry (OCIR), and deploys it through Argo CD. The manifests are plain Kubernetes YAML; this project does not use Helm.
+This project builds a Java 17 Spring Boot web app, publishes a container image to private Oracle Cloud Infrastructure Registry (OCIR), and deploys it through Argo CD to a three-node kubeadm Kubernetes cluster. The running app has two replicas and is exposed by a NodePort Service.
 
-## What each file does
+## How it works
 
-| File | Purpose |
+`GitHub main` → `Jenkins` → `Maven tests` → `SonarQube analysis` → `OCIR image` → `Git manifest update` → `Argo CD` → `Kubernetes`
+
+The Jenkinsfile configures `pollSCM('H/5 * * * *')` to check GitHub for changes about every five minutes; **Build Now** also works. Ordinary commits run the full pipeline. An automatically triggered build for Jenkins's own `ci: update deployment image to ...` commit skips the remaining stages, avoiding a build loop. No GitHub webhook is required for SCM polling.
+
+The pipeline runs Maven and SonarQube in a private JDK 17 Maven agent, then uses the Jenkins host's Docker-compatible CLI (Podman in this environment) to build and push a versioned image. The SonarQube stage uploads analysis but does not enforce a quality gate. The [Dockerfile](spring-boot-app/Dockerfile) uses an Oracle Java 21 runtime, which can run the Java 17 application. Jenkins then commits the new image tag to [deployment.yml](spring-boot-app-manifests/deployment.yml). Argo CD auto-syncs the manifests; it does not build the application.
+
+## Repository layout
+
+| Path | Purpose |
 | --- | --- |
-| `spring-boot-app/JenkinsFile` | Builds, tests, scans, publishes the image, and commits its new tag to Git. |
-| `spring-boot-app/Dockerfile` | Packages the built JAR with an Oracle Container Registry Java 21 runtime image. |
-| `spring-boot-app-manifests/` | Kubernetes Deployment and Service watched by Argo CD. |
-| `Argo CD/argocd-basic.yaml` | Creates the `example-argocd` Argo CD **instance** through the Argo CD Operator. It is for cluster setup, not application deployment. |
-| `Argo CD/spring-boot-app-application.yaml` | Creates the Argo CD **Application** that watches `spring-boot-app-manifests/` and deploys the Spring Boot app. |
-| `my-first-pipeline/Jenkinsfile` | Independent smoke test for a Jenkins Docker agent. |
+| [`spring-boot-app/`](spring-boot-app/) | Spring Boot source, tests, Dockerfile, and Jenkins pipeline. |
+| [`spring-boot-app-manifests/`](spring-boot-app-manifests/) | Kubernetes Deployment and NodePort Service watched by Argo CD. |
+| [`ci/maven-settings.xml`](ci/maven-settings.xml) | Maven proxy configuration for this environment. |
+| [`Argo CD/argocd-basic.yaml`](Argo%20CD/argocd-basic.yaml) | Creates an operator-managed Argo CD **instance**, not the app deployment. |
+| [`Argo CD/spring-boot-app-application.yaml`](Argo%20CD/spring-boot-app-application.yaml) | Optional YAML alternative to creating the Argo CD **Application** in the UI. |
 
-The flow is: source commit → Jenkins build and test → SonarQube scan → image push to OCIR → Jenkins commits the image tag → Argo CD syncs the Deployment and Service. Jenkins skips the extra build triggered by its own image-tag commit.
+## Setup
 
-## Jenkins prerequisites
+1. **Jenkins:** Create a **Pipeline script from SCM** job using repository `https://github.com/shravankumarinchur/Jenkins.git`, branch `*/main`, and script path `spring-boot-app/JenkinsFile` (capital `F`). Run it once with **Build Now** after setup. The host needs a working Docker-compatible CLI, GitHub access, and access to the private OCIR Maven-agent image configured in the Jenkinsfile.
+2. **Credentials:** Add `OCIR` as **Username with password** (OCIR username and auth token), `sonarqube` as **Secret text**, and `github` as **Username with password** (GitHub username and a token allowed to push to `main`). The pipeline expects SonarQube on the Jenkins host at `http://127.0.0.1:9000/`. Adjust [`ci/maven-settings.xml`](ci/maven-settings.xml) if your Maven proxy or artifact mirror differs.
+3. **Kubernetes:** Install the Argo CD Operator and create an Argo CD instance. The included `argocd-basic.yaml` is for that initial instance setup only. If required by the operator, label the `default` namespace so this instance can manage it:
 
-Configure a **Pipeline script from SCM** job using Git with Repository URL `https://github.com/shravankumarinchur/Jenkins.git`, Branch Specifier `*/main`, and Script Path `spring-boot-app/JenkinsFile` (capital `F`). Jenkins normally looks for a root-level `Jenkinsfile`, so the Script Path matters. The job needs the Git, Docker Pipeline, and Credentials Binding plugins and a worker with a working `docker`-compatible CLI (Docker or Podman) that can run, build, and push images. The GitHub plugin is optional and only needed for the webhook setup described below. If the repository is private, select a credential that the Jenkins Git SCM configuration can use for checkout; the `github` credential below is used inside the pipeline for pushing, not automatically for SCM checkout.
+   ```bash
+   kubectl label namespace default argocd.argoproj.io/managed-by=argocd --overwrite
+   ```
 
-The private OCIR image `ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/maven-agent:v1` contains JDK 17, Maven 3.6.3, and Git, as shown by the Jenkins build log. Jenkins prints their versions in the Maven container and checks the container CLI on the host before building the application image. The Maven container does not need access to `/var/run/docker.sock`; the host builds and pushes the application image using the JAR in the shared workspace. Maven also needs access to Maven Central through an approved proxy or to your configured artifact mirror. A direct connection to Maven Central was refused in the initial Jenkins run.
+4. **Private image pull:** If missing, create a registry Secret named **`ocir-secret` in `default`**, matching the Deployment's `imagePullSecrets`. Use a valid OCIR auth token; never commit it to Git:
 
-The pipeline passes `ci/maven-settings.xml` to Maven in both the build and Sonar stages. It uses the same `www-proxy-wdc.oraclecorp.com:80` proxy shown in the successful Git checkout and bypasses that proxy for localhost. Jenkins Git checkout's proxy setting does not configure Maven. This file contains no credentials; if the proxy requires authentication, use Jenkins credentials rather than adding a password to the repository.
+   ```bash
+   read -r -s -p 'OCIR auth token: ' OCIR_AUTH_TOKEN
+   echo
+   kubectl -n default create secret docker-registry ocir-secret \
+     --docker-server=ocir.us-ashburn-1.oci.oraclecloud.com \
+     --docker-username='<YOUR_OCIR_USERNAME>' \
+     --docker-password="$OCIR_AUTH_TOKEN"
+   unset OCIR_AUTH_TOKEN
+   ```
 
-Create these Jenkins credentials with the exact IDs below:
+5. **Argo CD:** Create an Application in the UI (or apply `Argo CD/spring-boot-app-application.yaml`) with repository `https://github.com/shravankumarinchur/Jenkins.git`, revision `main`, path `spring-boot-app-manifests`, destination cluster `https://kubernetes.default.svc`, namespace `default`, and **automated sync**. The UI-created Application works; the YAML file need not also be applied. If the repository is private, configure Argo CD repository access. Publish the first image before syncing a new installation.
 
-| ID | Type | Used for |
-| --- | --- | --- |
-| `OCIR` | Username with password | Pulling the private Maven agent and pushing the finished app image. Use your OCIR username and auth token. |
-| `sonarqube` | Secret text | SonarQube analysis token. |
-| `github` | Username with password | GitHub username and a personal access token **as the password**, with permission to write repository contents on `main`. A normal GitHub account password will not work for Git over HTTPS. |
-
-## Triggering builds
-
-The Jenkinsfile declares `pollSCM('H/5 * * * *')`, a trigger supported by this Jenkins installation. Commit and push this Jenkinsfile, then click **Build Now** once in the Jenkins job so Jenkins loads the trigger. Jenkins will check the configured Git repository for changes approximately every five minutes and run the job when it sees a new commit on `main`; no GitHub webhook or GitHub plugin is needed for this mode. **Build Now** works any time, including immediately after a manifest-only commit made by the pipeline; a manual build runs all stages. The pipeline skips an automatic build when the latest commit is its own `ci: update deployment image to ...` commit, preventing a build loop.
-
-For **immediate** push-triggered builds instead of polling, install the Jenkins GitHub plugin and configure this job's **Build Triggers → GitHub hook trigger for GITScm polling**. Remove the `pollSCM` block from the Jenkinsfile when switching to this mode. Create a webhook in the GitHub repository under **Settings → Webhooks → Add webhook** with payload URL `https://YOUR-REACHABLE-JENKINS-URL/github-webhook/` (include the trailing slash and any Jenkins context path), content type `application/json`, and **Just the push event**. GitHub must be able to reach Jenkins from the internet. Check GitHub's **Recent Deliveries** for a successful delivery, then push a small change to `main` and check the Jenkins job's build history. The `github` Jenkins credential is not a substitute for a webhook. Do not enable both trigger methods for this job.
-
-The SonarQube server runs on the Jenkins host and answered `http://127.0.0.1:9000/api/server/version` successfully. Only the Sonar analysis container uses `--network host`, allowing its `http://127.0.0.1:9000/` URL to reach that host service. Host networking removes network isolation for that container and should be reconsidered if SonarQube moves to another machine. The scan uploads results; this pipeline does not yet enforce a SonarQube quality gate.
-
-The application Dockerfile pulls `container-registry.oracle.com/graalvm/jdk:21`. Oracle Container Registry (`container-registry.oracle.com`) and your private OCIR (`ocir.us-ashburn-1.oci.oraclecloud.com`) are separate endpoints. The Jenkins worker must be able to pull the Java base image and push to OCIR.
-
-## Cluster bootstrap
-
-Your cluster already has the Argo CD Operator and the `example-argocd` instance running in the `argocd` namespace. You do not need to reapply `Argo CD/argocd-basic.yaml` to deploy this app. For a new cluster, install the operator, create the `argocd` namespace, then apply that file once to create the Argo CD instance. The file requests a `ClusterIP` server Service, matching the service type observed in your cluster.
-
-The operator-managed Argo CD instance needs permission to deploy into the `default` namespace. Give it access once with:
+## Verify and open the app
 
 ```bash
-kubectl label namespace default argocd.argoproj.io/managed-by=argocd --overwrite
-```
-
-If the GitHub repository is private, also configure its credentials in Argo CD so the repo server can read the manifests.
-
-Before the app can pull its private image, create an OCIR registry Secret in the `default` namespace. Use the same OCIR username and auth token as the Jenkins `OCIR` credential:
-
-```bash
-read -r -s -p 'OCIR auth token: ' OCIR_AUTH_TOKEN
-echo
-kubectl -n default create secret docker-registry ocir-pull-secret \
-  --docker-server=ocir.us-ashburn-1.oci.oraclecloud.com \
-  --docker-username='YOUR_OCIR_USERNAME' \
-  --docker-password="$OCIR_AUTH_TOKEN"
-unset OCIR_AUTH_TOKEN
-```
-
-Commit and push the repository changes, then run Jenkins once. The initial manifest uses `replaceImageTag`; Jenkins replaces it with the image tag it just published. After that first successful push, apply the Argo CD Application from a checkout of this repository:
-
-```bash
-kubectl apply -f 'Argo CD/spring-boot-app-application.yaml'
-kubectl -n argocd get applications.argoproj.io spring-boot-app
-kubectl -n default get deployment spring-boot-app
+kubectl -n default rollout status deployment/spring-boot-app
 kubectl -n default get pods -l app=spring-boot-app
-kubectl -n default get service spring-boot-app-service
+kubectl -n default get svc spring-boot-app-service
+kubectl get nodes -o wide
 ```
 
-The Service is a NodePort Service; Kubernetes assigns its external node port. If the Application reports a sync or health error, inspect it with `kubectl -n argocd describe application spring-boot-app` and inspect the app pods with `kubectl -n default describe pods -l app=spring-boot-app`.
+Open `http://<REACHABLE_NODE_IP>:<NODE_PORT>/`. The NodePort is the number after the colon in the Service's `PORT(S)` column (for example, `80:30798/TCP` means browser port `30798`). The Service forwards to the app on port `8080`; the home page is `/`. NodePort must be reachable from your browser's network.
+
+If Jenkins does not start after a push, inspect the job's **Polling Log** and confirm its repository, `main` branch, and script path. If pods show `ImagePullBackOff`, check the pod events and confirm that `ocir-secret` exists in `default` with credentials for the same OCIR hostname as the image.
