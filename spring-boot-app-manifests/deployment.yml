@@ -15,7 +15,7 @@ spec:
         app: spring-boot-app
     spec:
       imagePullSecrets:
-      - name: ocir-secret
+      - name: ocir-secret #secret for OCI registry
       containers:
       - name: spring-boot-app
         image: ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/ultimate-cicd:10
