@@ -22,6 +22,7 @@ class StartApplicationTest {
     void homePageRenders() throws Exception {
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("This application is deployed on to Kubernetes using Argo CD")));
+                .andExpect(content().string(containsString("Spring Boot application updated through the CI/CD pipeline")))
+                .andExpect(content().string(containsString("Built with Maven and Jenkins, then deployed to Kubernetes with Argo CD.")));
     }
 }
