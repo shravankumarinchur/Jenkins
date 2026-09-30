@@ -18,7 +18,7 @@ spec:
       - name: ocir-secret #secret for OCI registry
       containers:
       - name: spring-boot-app
-        image: ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/ultimate-cicd:14
+        image: ocir.us-ashburn-1.oci.oraclecloud.com/idsccoayafgg/my-project/ultimate-cicd:16
         ports:
         - containerPort: 8080
         readinessProbe:
